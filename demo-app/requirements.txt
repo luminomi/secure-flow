@@ -1,0 +1,7 @@
+Flask==3.1.2
+
+# VULN-3: Outdated dependency with a known CVE. INTENTIONAL.
+# requests 2.19.1 is affected by CVE-2018-18074 (it can leak the Authorization
+# header to another host after an HTTPS -> HTTP redirect). Fixed in 2.20.0.
+# It also pulls in an old urllib3 that has CVEs of its own.
+requests==2.19.1
