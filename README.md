@@ -11,7 +11,7 @@ Every pull request to `main` is scanned automatically by GitHub Actions. If a se
 | Stage | Tool | What it finds | Status |
 |-------|------|---------------|--------|
 | SAST (static analysis) | [Semgrep](https://semgrep.dev) | Insecure code patterns, e.g. SQL injection | ✅ Phase 1 |
-| Secret scanning | [Gitleaks](https://github.com/gitleaks/gitleaks) | Hardcoded API keys, tokens, passwords | 🔜 Planned |
+| Secret scanning | [Gitleaks](https://github.com/gitleaks/gitleaks) | Hardcoded API keys, tokens, passwords (every commit in the PR) | ✅ Phase 2 |
 | Container scanning | [Trivy](https://trivy.dev) | Known CVEs in the image and its dependencies | 🔜 Planned |
 | SBOM generation | [Syft](https://github.com/anchore/syft) | Inventory of every package shipped in the image | 🔜 Planned |
 
@@ -19,6 +19,7 @@ Every pull request to `main` is scanned automatically by GitHub Actions. If a se
 
 ```
 .github/workflows/semgrep.yml   # SAST gate on pull requests to main
+.github/workflows/gitleaks.yml  # Secret scanning gate on pull requests to main
 demo-app/                       # Intentionally vulnerable Flask app (scan target)
     app.py
     requirements.txt
@@ -53,11 +54,16 @@ docker run --rm -p 5000:5000 secure-flow-demo
 
 ## Merge gate
 
-`main` is protected by a branch protection rule that requires the **Semgrep scan** check to pass before a pull request can be merged.
+`main` is protected by a branch protection rule. Changes reach `main` only through pull requests, and these checks must pass before a pull request can be merged:
+
+| Required check | Workflow | Fails when |
+|----------------|----------|------------|
+| **Semgrep scan** | `semgrep.yml` | Semgrep reports any finding in the code |
+| **Gitleaks scan** | `gitleaks.yml` | Gitleaks finds a secret in any commit the pull request adds |
 
 ## Roadmap
 
 - [x] Phase 1: Demo app + Semgrep SAST gate
-- [ ] Phase 2: Gitleaks secret scanning
+- [x] Phase 2: Gitleaks secret scanning
 - [ ] Phase 3: Trivy container scanning
 - [ ] Phase 4: Syft SBOM generation
