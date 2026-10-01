@@ -11,7 +11,7 @@ Every pull request to `main` is scanned automatically by GitHub Actions. If a se
 | Stage | Tool | What it finds | Status |
 |-------|------|---------------|--------|
 | SAST (static analysis) | [Semgrep](https://semgrep.dev) | Insecure code patterns, e.g. SQL injection | ✅ Phase 1 |
-| Secret scanning | [Gitleaks](https://github.com/gitleaks/gitleaks) | Hardcoded API keys, tokens, passwords (full git history) | ✅ Phase 2 |
+| Secret scanning | [Gitleaks](https://github.com/gitleaks/gitleaks) | Hardcoded API keys, tokens, passwords (every commit in the PR) | ✅ Phase 2 |
 | Container scanning | [Trivy](https://trivy.dev) | Known CVEs in the image and its dependencies | 🔜 Planned |
 | SBOM generation | [Syft](https://github.com/anchore/syft) | Inventory of every package shipped in the image | 🔜 Planned |
 
@@ -59,7 +59,7 @@ docker run --rm -p 5000:5000 secure-flow-demo
 | Required check | Workflow | Fails when |
 |----------------|----------|------------|
 | **Semgrep scan** | `semgrep.yml` | Semgrep reports any finding in the code |
-| **Gitleaks scan** | `gitleaks.yml` | Gitleaks finds a secret in any commit in the history |
+| **Gitleaks scan** | `gitleaks.yml` | Gitleaks finds a secret in any commit the pull request adds |
 
 ## Roadmap
 

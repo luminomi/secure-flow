@@ -18,8 +18,8 @@ jobs:
     name: Gitleaks scan
     runs-on: ubuntu-latest
     steps:
-      # fetch-depth: 0 downloads the full git history, so Gitleaks can find
-      # secrets in old commits too, even ones that were later deleted.
+      # fetch-depth: 0 downloads the full git history. Gitleaks needs both the
+      # PR's base and head commits locally to work out which commits are new.
       - name: Check out code (full history)
         uses: actions/checkout@v5
         with:
@@ -38,8 +38,14 @@ jobs:
           tar -xzf "$tarball" gitleaks
           ./gitleaks version
 
-      # git      : scan every commit in the history, not just the current files
+      # Scan only the commits this pull request adds: everything reachable from
+      # the PR head but not from the PR base. Every commit in the PR is checked,
+      # so a secret added and then deleted within the PR is still caught.
+      # Without --log-opts, Gitleaks runs "git log --all" and scans every branch.
       # --redact : hide secret values in the public Actions log
       # Any finding makes Gitleaks exit with code 1, which fails the check.
       - name: Run Gitleaks
-        run: ./gitleaks git --redact --verbose
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: ./gitleaks git --redact --verbose --log-opts="${BASE_SHA}..${HEAD_SHA}"
