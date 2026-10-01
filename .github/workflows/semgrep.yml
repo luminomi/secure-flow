@@ -1,0 +1,32 @@
+name: Semgrep SAST
+
+# Run on every pull request that targets main.
+on:
+  pull_request:
+    branches: [main]
+
+# Least privilege: the job only needs to read the code.
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    # This name is what branch protection will list as the required check.
+    name: Semgrep scan
+    runs-on: ubuntu-latest
+    # Official Semgrep image, so there is nothing to install.
+    container:
+      image: semgrep/semgrep
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+
+      # --config  : rulesets from the Semgrep Registry (no account or token needed)
+      # --error   : exit with code 1 if anything is found, which fails the check
+      - name: Run Semgrep
+        run: |
+          semgrep scan \
+            --config p/python \
+            --config p/flask \
+            --config p/secrets \
+            --error

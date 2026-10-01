@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Secure Flow demo app: SQLite database created at runtime
+*.db
