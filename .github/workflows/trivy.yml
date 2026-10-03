@@ -1,0 +1,72 @@
+name: Trivy container scan
+
+# Run on every pull request that targets main.
+on:
+  pull_request:
+    branches: [main]
+
+# Least privilege: the job only needs to read the code.
+permissions:
+  contents: read
+
+env:
+  # v0.74.0 rather than the newest release: a few weeks' cooldown before
+  # adopting a new release (Trivy had a malicious release in March 2026).
+  TRIVY_VERSION: 0.74.0
+  APP_DIR: demo-app
+  IMAGE: secure-flow-demo:pr-scan
+
+jobs:
+  trivy:
+    # This name is what branch protection will list as the required check.
+    name: Trivy scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+
+      # This is a required check, so it must always report a result. If the PR
+      # has no Dockerfile, say so clearly and pass, instead of failing or
+      # never reporting (which would leave the PR stuck waiting).
+      # Trade-off: a PR that removes the Dockerfile also passes this check.
+      - name: Check for a Dockerfile
+        id: dockerfile
+        run: |
+          if [ -f "$APP_DIR/Dockerfile" ]; then
+            echo "Found $APP_DIR/Dockerfile, will build and scan it."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No $APP_DIR/Dockerfile in this pull request - nothing to scan. Trivy scan passes."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Use the Trivy CLI directly (no wrapper action). The download is checked
+      # against the release's published SHA-256 checksums before it is run.
+      - name: Install Trivy
+        if: steps.dockerfile.outputs.skip != 'true'
+        run: |
+          base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+          tarball="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -sSfL -o "$tarball" "$base/$tarball"
+          curl -sSfL -o checksums.txt "$base/trivy_${TRIVY_VERSION}_checksums.txt"
+          grep " ${tarball}\$" checksums.txt | sha256sum --check
+          tar -xzf "$tarball" trivy
+          ./trivy --version
+
+      - name: Build image
+        if: steps.dockerfile.outputs.skip != 'true'
+        run: docker build -t "$IMAGE" "$APP_DIR"
+
+      # --scanners vuln        : only look for known CVEs (Gitleaks handles secrets)
+      # --severity HIGH,CRITICAL
+      # --ignore-unfixed       : skip CVEs that have no fixed version yet
+      # --exit-code 1          : any remaining finding fails the check
+      - name: Scan image
+        if: steps.dockerfile.outputs.skip != 'true'
+        run: |
+          ./trivy image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            "$IMAGE"
