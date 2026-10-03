@@ -13,7 +13,7 @@ Every pull request to `main` is scanned automatically by GitHub Actions. If a se
 | SAST (static analysis) | [Semgrep](https://semgrep.dev) | Insecure code patterns, e.g. SQL injection | ✅ Phase 1 |
 | Secret scanning | [Gitleaks](https://github.com/gitleaks/gitleaks) | Hardcoded API keys, tokens, passwords (every commit in the PR) | ✅ Phase 2 |
 | Container scanning | [Trivy](https://trivy.dev) | Known CVEs in the image and its dependencies | ✅ Phase 3 |
-| SBOM generation | [Syft](https://github.com/anchore/syft) | Inventory of every package shipped in the image | 🔜 Planned |
+| SBOM generation | [Syft](https://github.com/anchore/syft) | Inventory of every package shipped in the image (CycloneDX JSON, downloadable from each run) | ✅ Phase 4 |
 
 ## Repository layout
 
@@ -21,6 +21,7 @@ Every pull request to `main` is scanned automatically by GitHub Actions. If a se
 .github/workflows/semgrep.yml   # SAST gate on pull requests to main
 .github/workflows/gitleaks.yml  # Secret scanning gate on pull requests to main
 .github/workflows/trivy.yml     # Container scanning gate on pull requests to main
+.github/workflows/syft.yml      # SBOM generation on pull requests to main
 demo-app/                       # Intentionally vulnerable Flask app (scan target)
     app.py
     requirements.txt
@@ -62,10 +63,11 @@ docker run --rm -p 5000:5000 secure-flow-demo
 | **Semgrep scan** | `semgrep.yml` | Semgrep reports any finding in the code |
 | **Gitleaks scan** | `gitleaks.yml` | Gitleaks finds a secret in any commit the pull request adds |
 | **Trivy scan** | `trivy.yml` | The built `demo-app` image has a HIGH or CRITICAL CVE with a fix available (passes with a notice if the PR has no `demo-app/Dockerfile`) |
+| **Syft SBOM** | `syft.yml` | The SBOM cannot be generated or uploaded. Never fails because of what is in the SBOM (passes with a notice if the PR has no `demo-app/Dockerfile`) |
 
 ## Roadmap
 
 - [x] Phase 1: Demo app + Semgrep SAST gate
 - [x] Phase 2: Gitleaks secret scanning
 - [x] Phase 3: Trivy container scanning
-- [ ] Phase 4: Syft SBOM generation
+- [x] Phase 4: Syft SBOM generation

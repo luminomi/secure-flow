@@ -1,0 +1,84 @@
+name: Syft SBOM
+
+# Run on every pull request that targets main.
+on:
+  pull_request:
+    branches: [main]
+
+# Least privilege: the job only needs to read the code.
+# Uploading a workflow artifact does not need any write permission.
+permissions:
+  contents: read
+
+env:
+  # v1.51.1 rather than the newest release: a few weeks' cooldown before
+  # adopting a new release, same policy as Trivy.
+  SYFT_VERSION: 1.51.1
+  SYFT_CHECK_FOR_APP_UPDATE: "false"
+  APP_DIR: demo-app
+  IMAGE: secure-flow-demo:pr-sbom
+  SBOM_FILE: sbom.cdx.json
+
+jobs:
+  syft:
+    # This name is what branch protection will list as the required check.
+    # An SBOM is an inventory, not a verdict: this job fails only if the SBOM
+    # cannot be generated or uploaded, never because of what is in it.
+    # Judging the packages is Trivy's job.
+    name: Syft SBOM
+    runs-on: ubuntu-latest
+    steps:
+      # Actions are pinned to a full commit SHA, not a tag. A tag can be moved
+      # to different code by whoever controls the action's repo; a SHA cannot.
+      - name: Check out code
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      # Same handling as the Trivy workflow: if the PR has no Dockerfile, say
+      # so clearly and pass, so this required check never leaves a PR stuck.
+      - name: Check for a Dockerfile
+        id: dockerfile
+        run: |
+          if [ -f "$APP_DIR/Dockerfile" ]; then
+            echo "Found $APP_DIR/Dockerfile, will build it and generate an SBOM."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No $APP_DIR/Dockerfile in this pull request - nothing to scan. Syft SBOM passes."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Use the Syft CLI directly (no wrapper action). The download is checked
+      # against the release's published SHA-256 checksums before it is run.
+      - name: Install Syft
+        if: steps.dockerfile.outputs.skip != 'true'
+        run: |
+          base="https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}"
+          tarball="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          curl -sSfL -o "$tarball" "$base/$tarball"
+          curl -sSfL -o checksums.txt "$base/syft_${SYFT_VERSION}_checksums.txt"
+          grep " ${tarball}\$" checksums.txt | sha256sum --check
+          tar -xzf "$tarball" syft
+          ./syft version
+
+      - name: Build image
+        if: steps.dockerfile.outputs.skip != 'true'
+        run: docker build -t "$IMAGE" "$APP_DIR"
+
+      # CycloneDX JSON is a standard SBOM format that other tools can read.
+      # The summary lines are only a quick check in the log; they never fail the job.
+      - name: Generate SBOM
+        if: steps.dockerfile.outputs.skip != 'true'
+        run: |
+          ./syft "$IMAGE" -o "cyclonedx-json=$SBOM_FILE"
+          echo "Components in SBOM: $(jq '.components | length' "$SBOM_FILE")"
+          echo "Python packages of interest:"
+          jq -r '.components[] | select(.name == "requests" or .name == "urllib3") | "  \(.name) \(.version)"' "$SBOM_FILE"
+
+      # if-no-files-found: error makes a missing SBOM fail the check loudly.
+      - name: Upload SBOM
+        if: steps.dockerfile.outputs.skip != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom-demo-app-cyclonedx
+          path: ${{ env.SBOM_FILE }}
+          if-no-files-found: error
+          retention-days: 30
